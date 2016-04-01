@@ -26,21 +26,22 @@ char2code = {v: k for k, v in code2char.items()}
 unk_char = '<UNK>'
 
 
-def plot_tight(X, save_name=None):
+def plot_tight(data, save_name=None):
     # Plot a single example.
     f, ax = pyplot.subplots()
 
-    X = data_std * X + data_mean
+    #std_x = data_std * data + data_mean
+    std_x = data
 
-    x = numpy.cumsum(X[:, 1])
-    y = numpy.cumsum(X[:, 2])
+    x = numpy.cumsum(std_x[:, 1])
+    y = numpy.cumsum(std_x[:, 2])
 
     size_x = x.max() - x.min() + 1.
     size_y = y.max() - y.min() + 1.
 
     f.set_size_inches(5. * size_x / size_y, 5.)
 
-    cuts = numpy.where(X[:, 0] == 1)[0]
+    cuts = numpy.where(std_x[:, 0] == 1)[0]
     start = 0
 
     for cut_value in cuts:
@@ -117,7 +118,7 @@ def sample_parse():
     parser.add_argument('--num_steps', type=int, default=1000,
                         help='maximum size of each sample')
     parser.add_argument('--save_dir', type=str,
-                        default=save_dir,
+                        default='./trained/',
                         help='save dir directory')
     parser.add_argument('--phrase', type=str, default='what should i write',
                         help='phrase to write')

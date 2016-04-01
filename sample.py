@@ -12,7 +12,7 @@ from blocks.serialization import load_parameters
 from blocks.model import Model
 from model import Scribe
 from theano import function
-from utils import char2code, sample_parse
+from utils import char2code, sample_parse, plot_tight
 
 logging.basicConfig()
 
@@ -45,19 +45,19 @@ sample_x, updates_sample = scribe.sample_model(
     context, context_mask, args.num_steps, args.num_samples)
 
 model = Model(sample_x)
-
 model.set_parameter_values(parameters)
 
 phrase = args.phrase + "  "
 phrase = [char2code[char_] for char_ in phrase]
 phrase = numpy.array(phrase, dtype='int32').reshape([-1, 1])
 phrase = numpy.repeat(phrase, args.num_samples, axis=1).T
-
 phrase_mask = numpy.ones(phrase.shape, dtype='float32')
 
-sampled_values = function(
+tf = function(
     [context, context_mask],
     sample_x,
-    updates=updates_sample)(phrase, phrase_mask)
+    updates=updates_sample)
 
-print sampled_values.shape
+sampled_values = tf(phrase, phrase_mask).swapaxes(0, 1)
+
+plot_tight(sampled_values[0], args.save_dir + "/samples/test.png")

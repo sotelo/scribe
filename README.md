@@ -36,8 +36,5 @@ Save these two files in $FUEL_DATA_PATH/handwriting and run:
  * Change data processing to sort sequences by length.
  * Benchmark standardized data against scaled-only data.
 
-URGENT:
- * Write code for evaluation in validation set.
-
 ## References:
  * https://github.com/udibr/sketch
