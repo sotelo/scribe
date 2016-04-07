@@ -29,14 +29,13 @@ with open(os.path.join(
         "best_" + args.experiment_name + ".tar"), 'rb') as src:
     parameters = load_parameters(src)
 
-parameters = {k.replace('scribe/', ''): v for k, v in parameters.items()}
-
 scribe = Scribe(
     k=saved_args.num_mixture,
     rec_h_dim=saved_args.rnn_size,
     att_size=saved_args.size_attention,
     num_letters=saved_args.num_letters,
-    sampling_bias=args.sampling_bias)
+    sampling_bias=args.sampling_bias,
+    name="scribe")
 
 data, data_mask, context, context_mask, start_flag = \
     scribe.symbolic_input_variables()

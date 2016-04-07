@@ -187,7 +187,6 @@ class Scribe(Initializable):
             num_letters=68,
             sampling_bias=0.,
             **kwargs):
-
         super(Scribe, self).__init__(**kwargs)
 
         readouts_dim = 1 + 6 * k
@@ -286,7 +285,8 @@ class Scribe(Initializable):
             self.inp_to_h1, self.inp_to_h2, self.inp_to_h3,
             self.h1_to_h2, self.h1_to_h3, self.h2_to_h3,
             self.h1_to_readout, self.h2_to_readout, self.h3_to_readout,
-            self.h1_to_att, self.att_to_h1, self.att_to_h2, self.att_to_h3]
+            self.h1_to_att, self.att_to_h1, self.att_to_h2, self.att_to_h3,
+            self.emitter]
 
     def symbolic_input_variables(self):
         data = tensor.tensor3('features')
@@ -306,6 +306,7 @@ class Scribe(Initializable):
 
         return initial_h1, initial_h2, initial_h3, initial_kappa, initial_w
 
+    @application
     def compute_cost(
             self,
             data,
@@ -388,7 +389,6 @@ class Scribe(Initializable):
 
         cost = self.emitter.cost(readouts, target)
         cost = (cost * mask).sum() / (mask.sum() + 1e-5) + 0. * start_flag
-        cost.name = 'nll'
 
         updates = []
         updates.append((
@@ -409,6 +409,7 @@ class Scribe(Initializable):
 
         return cost, scan_updates + updates
 
+    @application
     def sample_model(self, context, context_mask, n_steps, batch_size):
 
         initial_h1, initial_h2, initial_h3, initial_kappa, initial_w = \

@@ -99,6 +99,11 @@ def train_parse():
                         help='number of samples')
     parser.add_argument('--num_steps', type=int, default=1000,
                         help='maximum size of each sample')
+    parser.add_argument('--time_limit', type=float, default=None,
+                        help='time in hours that the model will run')
+    parser.add_argument('--load_experiment', type=str,
+                        default=None,
+                        help='name of the experiment that will be loaded')
     # args = parser.parse_args()
     return parser
 

@@ -6,13 +6,13 @@ from blocks.extensions import (Printing, Timing)
 from blocks.extensions.monitoring import (
     DataStreamMonitoring, TrainingDataMonitoring)
 from blocks.extensions.predicates import OnLogRecord
-from blocks.extensions.saveload import Checkpoint
+from blocks.extensions.saveload import Checkpoint, Load
 from blocks.extensions.training import TrackTheBest
 from blocks.graph import ComputationGraph
 from blocks.main_loop import MainLoop
 from blocks.model import Model
 import cPickle
-from extensions import Plot, Write
+from extensions import Plot, TimedFinish, Write
 from iam_on_line import stream_handwriting
 from model import Scribe
 from theano import function
@@ -51,7 +51,8 @@ scribe = Scribe(
     num_letters=args.num_letters,
     sampling_bias=0.,
     weights_init=w_init,
-    biases_init=b_init)
+    biases_init=b_init,
+    name="scribe")
 scribe.initialize()
 
 data, data_mask, context, context_mask, start_flag = \
@@ -59,6 +60,7 @@ data, data_mask, context, context_mask, start_flag = \
 
 cost, extra_updates = scribe.compute_cost(
     data, data_mask, context, context_mask, start_flag, args.batch_size)
+cost.name = 'nll'
 
 sample_x, updates_sample = scribe.sample_model(
     context, context_mask, args.num_steps, args.num_samples)
@@ -80,26 +82,38 @@ algorithm.add_updates(extra_updates)
 train_monitor = TrainingDataMonitoring(
     variables=[cost],
     every_n_batches=args.save_every,
+    after_epoch=False,
     prefix="train")
 
 valid_monitor = DataStreamMonitoring(
     [cost],
     valid_stream,
     every_n_batches=args.save_every,
+    after_epoch=False,
     prefix="valid")
 
-extensions = [
+extensions = []
+
+if args.load_experiment:
+    extensions += [Load(
+        os.path.join(save_dir, "pkl", "best_" + args.load_experiment + ".tar"))]
+
+extensions += [
     Timing(every_n_batches=args.save_every),
     train_monitor,
     valid_monitor,
-    TrackTheBest('valid_nll', every_n_batches=args.save_every),
+    TrackTheBest(
+        'valid_nll',
+        every_n_batches=args.save_every,
+        before_first_epoch=True),
     Plot(
-        save_dir + "progress/" + exp_name + ".png",
+        os.path.join(save_dir, "progress", exp_name + ".png"),
         [['train_nll', 'valid_nll']],
         every_n_batches=args.save_every,
         email=False),
     Checkpoint(
-        save_dir + "pkl/best_" + exp_name + ".tar",
+        os.path.join(save_dir, "pkl", "best_" + exp_name + ".tar"),
+        after_training=False,
         save_separately=['log'],
         use_cpickle=True,
         save_main_loop=False)
@@ -110,8 +124,13 @@ extensions = [
         sampling_function,
         every_n_batches=args.save_every,
         n_samples=args.num_samples,
-        save_name=save_dir + "samples/" + exp_name),
-    Printing(every_n_batches=args.save_every)]
+        save_name=os.path.join(save_dir, "samples", exp_name)),
+    Printing(
+        after_epoch=False,
+        every_n_batches=args.save_every)]
+
+if args.time_limit:
+    extensions += [TimedFinish(args.time_limit)]
 
 main_loop = MainLoop(
     model=model,
@@ -119,4 +138,5 @@ main_loop = MainLoop(
     algorithm=algorithm,
     extensions=extensions)
 
+print "Training starting."
 main_loop.run()

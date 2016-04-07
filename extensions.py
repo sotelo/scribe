@@ -1,5 +1,6 @@
 import matplotlib
 import numpy
+from time import gmtime, strftime, time
 
 from blocks.extensions import SimpleExtension
 from pandas import DataFrame
@@ -24,10 +25,6 @@ class Plot(SimpleExtension):
         ['weight_norms']]`` to plot a single figure with the training and
         test cost, and a second figure for the weight norms.
     """
-
-    # Tableau 10 colors
-    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
-              '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
 
     def __init__(self, document, channels, email=True, **kwargs):
         self.plots = {}
@@ -93,3 +90,27 @@ class Write(SimpleExtension):
                 self.save_name + "_" + str(self.step) + "_" + str(i) + ".png")
 
         self.step += 1
+
+
+class TimedFinish(SimpleExtension):
+    """Finish training on schedule.
+
+    This extension finishes the training after a certain amount of time. This
+    is useful for running in clusters. The time_limit is interpreted as hours.
+
+    """
+
+    def __init__(self, time_limit):
+        super(TimedFinish, self).__init__(after_batch=True)
+        self.time_limit = time_limit * 60 * 60
+        self.start_time = time()
+
+        print "Training started at: ", strftime(
+            "%Y-%m-%d %H:%M:%S", gmtime(self.start_time))
+
+        print "Training will be finished at: ", strftime(
+            "%Y-%m-%d %H:%M:%S", gmtime(self.start_time + self.time_limit))
+
+    def do(self, which_callback, *args):
+        if time() - self.start_time > self.time_limit:
+            self.main_loop.log.current_row['training_finish_requested'] = True

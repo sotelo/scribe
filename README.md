@@ -27,13 +27,11 @@ Save these two files in $FUEL_DATA_PATH/handwriting and run:
 
 ## To Do
  * Improve documentation.
- * Fix code to decide when to finish sampling. Now it's hacky.
+ * Fix code to decide when to finish sampling.
  * Write code for weight noise and variational objective.
  * Make model more flexible. Right now the number of layers is hardcoded.
  * Implement Samy Bengio's scheduled sampling. 
  * Test multigpu results. Speed. Generalization.
- * Add mask support for different length sequences.
- * Change data processing to sort sequences by length.
  * Benchmark standardized data against scaled-only data.
 
 ## References:
