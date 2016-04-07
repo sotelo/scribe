@@ -104,7 +104,9 @@ def train_parse():
     parser.add_argument('--load_experiment', type=str,
                         default=None,
                         help='name of the experiment that will be loaded')
-    # args = parser.parse_args()
+    parser.add_argument('--platoon_port', type=int,
+                        default=None,
+                        help='port where platoon server is running')
     return parser
 
 

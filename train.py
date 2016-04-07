@@ -92,39 +92,62 @@ valid_monitor = DataStreamMonitoring(
     after_epoch=False,
     prefix="valid")
 
+# Multi GPU
+worker = None
+if args.platoon_port:
+    from blocks_extras.extensions.synchronization import (
+        Synchronize, SynchronizeWorker)
+    from platoon.param_sync import ASGD
+
+    sync_rule = ASGD()
+    worker = SynchronizeWorker(
+        sync_rule, control_port=args.platoon_port, socket_timeout=2000)
+
 extensions = []
 
-if args.load_experiment:
-    extensions += [Load(
-        os.path.join(save_dir, "pkl", "best_" + args.load_experiment + ".tar"))]
+if args.load_experiment and (not worker or worker.is_main_worker):
+    extensions += [Load(os.path.join(
+        save_dir, "pkl", "best_" + args.load_experiment + ".tar"))]
 
 extensions += [
     Timing(every_n_batches=args.save_every),
-    train_monitor,
-    valid_monitor,
-    TrackTheBest(
-        'valid_nll',
-        every_n_batches=args.save_every,
-        before_first_epoch=True),
-    Plot(
-        os.path.join(save_dir, "progress", exp_name + ".png"),
-        [['train_nll', 'valid_nll']],
-        every_n_batches=args.save_every,
-        email=False),
-    Checkpoint(
-        os.path.join(save_dir, "pkl", "best_" + exp_name + ".tar"),
-        after_training=False,
-        save_separately=['log'],
-        use_cpickle=True,
-        save_main_loop=False)
-    .add_condition(
-        ["after_batch"],
-        predicate=OnLogRecord('valid_nll_best_so_far')),
-    Write(
-        sampling_function,
-        every_n_batches=args.save_every,
-        n_samples=args.num_samples,
-        save_name=os.path.join(save_dir, "samples", exp_name)),
+    train_monitor]
+
+if not worker or worker.is_main_worker:
+    extensions += [
+        valid_monitor,
+        TrackTheBest(
+            'valid_nll',
+            every_n_batches=args.save_every,
+            before_first_epoch=True),
+        Plot(
+            os.path.join(save_dir, "progress", exp_name + ".png"),
+            [['train_nll', 'valid_nll']],
+            every_n_batches=args.save_every,
+            email=False),
+        Checkpoint(
+            os.path.join(save_dir, "pkl", "best_" + exp_name + ".tar"),
+            after_training=False,
+            save_separately=['log'],
+            use_cpickle=True,
+            save_main_loop=False)
+        .add_condition(
+            ["after_batch"],
+            predicate=OnLogRecord('valid_nll_best_so_far')),
+        Write(
+            sampling_function,
+            every_n_batches=args.save_every,
+            n_samples=args.num_samples,
+            save_name=os.path.join(save_dir, "samples", exp_name))]
+
+if worker:
+    extensions += [
+        Synchronize(
+            worker,
+            after_batch=True,
+            before_epoch=True)]
+
+extensions += [
     Printing(
         after_epoch=False,
         every_n_batches=args.save_every)]
