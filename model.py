@@ -42,11 +42,10 @@ def predict(probs, axis=-1):
 
 
 def bivariate_gmm(y, mu, sigma, corr, coeff, binary, epsilon=1e-5):
-    """ Bivariate gaussian mixture model negative log-likelihood.
+    """Bivariate gaussian mixture model negative log-likelihood.
 
     Parameters
 
-    ----------
     """
     n_dim = y.ndim
     shape_y = y.shape
@@ -83,10 +82,13 @@ def bivariate_gmm(y, mu, sigma, corr, coeff, binary, epsilon=1e-5):
 
 class BivariateGMMEmitter(AbstractEmitter, Initializable, Random):
     """A mixture of gaussians emitter for x,y and logistic for pen-up/down.
+
     Parameters
     ----------
     k : number of components
+
     """
+
     def __init__(self, k=20, epsilon=1e-5, sampling_bias=0., **kwargs):
         self.k = k
         self.epsilon = epsilon
@@ -125,6 +127,10 @@ class BivariateGMMEmitter(AbstractEmitter, Initializable, Random):
     @application
     def emit(self, readouts):
         """Sample from the distribution.
+
+        Parameters:
+            readouts: readouts from the rnn + attention
+
         """
         mu, sigma, corr, coeff, penup = self.components(readouts)
 
@@ -159,7 +165,12 @@ class BivariateGMMEmitter(AbstractEmitter, Initializable, Random):
 
     @application
     def cost(self, readouts, outputs):
-        """ Bivariate Gaussian NLL.
+        """Bivariate Gaussian NLL.
+
+        Parameters:
+            readouts: readouts from the transition + attention
+            outputs: true value from the data
+
         """
         mu, sigma, corr, coeff, penup = self.components(readouts)
         return bivariate_gmm(
@@ -352,11 +363,10 @@ class Scribe(Initializable):
             k_t_ = tensor.shape_padright(k_t)
 
             # batch size X att size X len context
-            ss4 = tensor.sum(a_t * tensor.exp(-b_t * (k_t_ - u)**2), axis=1)
+            phi_t = tensor.sum(a_t * tensor.exp(-b_t * (k_t_ - u)**2), axis=1)
 
             # batch size X len context X num letters
-            ss6 = tensor.shape_padright(ss4) * ctx
-            w_t = ss6.sum(axis=1)
+            w_t = (tensor.shape_padright(phi_t) * ctx).sum(axis=1)
 
             # batch size X num letters
             attinp_h2, attgat_h2 = self.att_to_h2.apply(w_t)
@@ -447,11 +457,10 @@ class Scribe(Initializable):
             k_t_ = tensor.shape_padright(k_t)
 
             # batch size X att size X len context
-            ss4 = tensor.sum(a_t * tensor.exp(-b_t * (k_t_ - u)**2), axis=1)
+            phi_t = tensor.sum(a_t * tensor.exp(-b_t * (k_t_ - u)**2), axis=1)
 
             # batch size X len context X num letters
-            ss6 = tensor.shape_padright(ss4) * ctx
-            w_t = ss6.sum(axis=1)
+            w_t = (tensor.shape_padright(phi_t) * ctx).sum(axis=1)
 
             # batch size X num letters
             attinp_h2, attgat_h2 = self.att_to_h2.apply(w_t)
@@ -475,9 +484,12 @@ class Scribe(Initializable):
 
             x_t = self.emitter.emit(readout_t)
 
-            return x_t, h1_t, h2_t, h3_t, k_t, w_t
+            mu_t, sigma_t, corr_t, pi_t, penup_t = \
+                self.emitter.components(readout_t)
 
-        (sample_x, h1, h2, h3, k, w), updates = theano.scan(
+            return x_t, h1_t, h2_t, h3_t, k_t, w_t, pi_t, phi_t, a_t
+
+        (sample_x, h1, h2, h3, k, w, pi, phi, pi_att), updates = theano.scan(
             fn=sample_step,
             n_steps=n_steps,
             sequences=[],
@@ -488,6 +500,9 @@ class Scribe(Initializable):
                 initial_h2,
                 initial_h3,
                 initial_kappa,
-                initial_w])
+                initial_w,
+                None,
+                None,
+                None])
 
-        return sample_x, updates
+        return sample_x, pi, phi, pi_att, updates

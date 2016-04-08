@@ -27,7 +27,6 @@ Save these two files in $FUEL_DATA_PATH/handwriting and run:
 
 ## To Do
  * Improve documentation.
- * Fix code to decide when to finish sampling.
  * Write code for weight noise and variational objective.
  * Make model more flexible. Right now the number of layers is hardcoded.
  * Implement Samy Bengio's scheduled sampling. 

@@ -30,7 +30,7 @@ def plot_tight(data, save_name=None):
     # Plot a single example.
     f, ax = pyplot.subplots()
 
-    #std_x = data_std * data + data_mean
+    # std_x = data_std * data + data_mean
     std_x = data
 
     x = numpy.cumsum(std_x[:, 1])
@@ -51,6 +51,50 @@ def plot_tight(data, save_name=None):
     ax.axis('equal')
     ax.axes.get_xaxis().set_visible(False)
     ax.axes.get_yaxis().set_visible(False)
+
+    if save_name is None:
+        pyplot.show()
+    else:
+        try:
+            pyplot.savefig(
+                save_name,
+                bbox_inches='tight',
+                pad_inches=0.5)
+        except Exception:
+            print "Error building image!: " + save_name
+
+    pyplot.close()
+
+
+def full_plot(data, pi, phi, pi_at, save_name=None):
+    # Plot a single example.
+    f, (ax1, ax2, ax3, ax4) = pyplot.subplots(4, 1)
+
+    # std_x = data_std * data + data_mean
+    std_x = data
+
+    x = numpy.cumsum(std_x[:, 1])
+    y = numpy.cumsum(std_x[:, 2])
+
+    size_x = x.max() - x.min() + 1.
+    size_y = y.max() - y.min() + 1.
+
+    f.set_size_inches(5. * size_x / size_y, 20.)
+
+    cuts = numpy.where(std_x[:, 0] == 1)[0]
+    start = 0
+
+    for cut_value in cuts:
+        ax1.plot(
+            x[start:cut_value], y[start:cut_value], 'k-', linewidth=1.5)
+        start = cut_value + 1
+    ax1.axis('equal')
+    ax1.axes.get_xaxis().set_visible(False)
+    ax1.axes.get_yaxis().set_visible(False)
+
+    ax2.imshow(phi.T, aspect='auto', origin='lower', interpolation='nearest')
+    ax3.imshow(pi_at.T, aspect='auto', origin='lower', interpolation='nearest')
+    ax4.imshow(pi.T, aspect='auto', origin='lower', interpolation='nearest')
 
     if save_name is None:
         pyplot.show()
@@ -124,6 +168,8 @@ def sample_parse():
                         help='number of samples')
     parser.add_argument('--num_steps', type=int, default=1000,
                         help='maximum size of each sample')
+    parser.add_argument('--samples_name', type=str, default='sample',
+                        help='name to save the samples.')
     parser.add_argument('--save_dir', type=str,
                         default='./trained/',
                         help='save dir directory')

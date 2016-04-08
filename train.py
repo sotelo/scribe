@@ -62,8 +62,9 @@ cost, extra_updates = scribe.compute_cost(
     data, data_mask, context, context_mask, start_flag, args.batch_size)
 cost.name = 'nll'
 
-sample_x, updates_sample = scribe.sample_model(
-    context, context_mask, args.num_steps, args.num_samples)
+sample_x, sample_pi, sample_phi, sample_pi_att, updates_sample = \
+    scribe.sample_model(
+        context, context_mask, args.num_steps, args.num_samples)
 
 sampling_function = function(
     [context, context_mask], sample_x, updates=updates_sample)
