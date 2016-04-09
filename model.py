@@ -209,8 +209,6 @@ class Scribe(Initializable):
         self.sampling_bias = sampling_bias
 
         self.cell1 = GatedRecurrent(dim=rec_h_dim, name='cell1')
-        self.cell2 = GatedRecurrent(dim=rec_h_dim, name='cell2')
-        self.cell3 = GatedRecurrent(dim=rec_h_dim, name='cell3')
 
         self.inp_to_h1 = Fork(
             output_names=['cell1_inputs', 'cell1_gates'],
@@ -218,50 +216,10 @@ class Scribe(Initializable):
             output_dims=[rec_h_dim, 2 * rec_h_dim],
             name='inp_to_h1')
 
-        self.inp_to_h2 = Fork(
-            output_names=['cell2_inputs', 'cell2_gates'],
-            input_dim=3,
-            output_dims=[rec_h_dim, 2 * rec_h_dim],
-            name='inp_to_h2')
-
-        self.inp_to_h3 = Fork(
-            output_names=['cell3_inputs', 'cell3_gates'],
-            input_dim=3,
-            output_dims=[rec_h_dim, 2 * rec_h_dim],
-            name='inp_to_h3')
-
-        self.h1_to_h2 = Fork(
-            output_names=['cell2_inputs', 'cell2_gates'],
-            input_dim=rec_h_dim,
-            output_dims=[rec_h_dim, 2 * rec_h_dim],
-            name='h1_to_h2')
-
-        self.h1_to_h3 = Fork(
-            output_names=['cell3_inputs', 'cell3_gates'],
-            input_dim=rec_h_dim,
-            output_dims=[rec_h_dim, 2 * rec_h_dim],
-            name='h1_to_h3')
-
-        self.h2_to_h3 = Fork(
-            output_names=['cell3_inputs', 'cell3_gates'],
-            input_dim=rec_h_dim,
-            output_dims=[rec_h_dim, 2 * rec_h_dim],
-            name='h2_to_h3')
-
         self.h1_to_readout = Linear(
             input_dim=rec_h_dim,
             output_dim=readouts_dim,
             name='h1_to_readout')
-
-        self.h2_to_readout = Linear(
-            input_dim=rec_h_dim,
-            output_dim=readouts_dim,
-            name='h2_to_readout')
-
-        self.h3_to_readout = Linear(
-            input_dim=rec_h_dim,
-            output_dim=readouts_dim,
-            name='h3_to_readout')
 
         self.h1_to_att = Fork(
             output_names=['alpha', 'beta', 'kappa'],
@@ -275,28 +233,22 @@ class Scribe(Initializable):
             output_dims=[rec_h_dim, 2 * rec_h_dim],
             name='att_to_h1')
 
-        self.att_to_h2 = Fork(
-            output_names=['cell2_inputs', 'cell2_gates'],
+        self.att_to_readout = Linear(
             input_dim=num_letters,
-            output_dims=[rec_h_dim, 2 * rec_h_dim],
-            name='att_to_h2')
-
-        self.att_to_h3 = Fork(
-            output_names=['cell3_inputs', 'cell3_gates'],
-            input_dim=num_letters,
-            output_dims=[rec_h_dim, 2 * rec_h_dim],
-            name='att_to_h3')
+            output_dim=readouts_dim,
+            name='att_to_readout')
 
         self.emitter = BivariateGMMEmitter(
             k=k,
             sampling_bias=sampling_bias)
 
         self.children = [
-            self.cell1, self.cell2, self.cell3,
-            self.inp_to_h1, self.inp_to_h2, self.inp_to_h3,
-            self.h1_to_h2, self.h1_to_h3, self.h2_to_h3,
-            self.h1_to_readout, self.h2_to_readout, self.h3_to_readout,
-            self.h1_to_att, self.att_to_h1, self.att_to_h2, self.att_to_h3,
+            self.cell1,
+            self.inp_to_h1,
+            self.h1_to_readout,
+            self.h1_to_att,
+            self.att_to_h1,
+            self.att_to_readout,
             self.emitter]
 
     def symbolic_input_variables(self):
@@ -310,12 +262,10 @@ class Scribe(Initializable):
 
     def initial_states(self, batch_size):
         initial_h1 = shared_floatx_zeros((batch_size, self.rec_h_dim))
-        initial_h2 = shared_floatx_zeros((batch_size, self.rec_h_dim))
-        initial_h3 = shared_floatx_zeros((batch_size, self.rec_h_dim))
         initial_kappa = shared_floatx_zeros((batch_size, self.att_size))
         initial_w = shared_floatx_zeros((batch_size, self.num_letters))
 
-        return initial_h1, initial_h2, initial_h3, initial_kappa, initial_w
+        return initial_h1, initial_kappa, initial_w
 
     @application
     def compute_cost(
@@ -330,27 +280,22 @@ class Scribe(Initializable):
         target = data[1:]
         mask = data_mask[1:]
         xinp_h1, xgat_h1 = self.inp_to_h1.apply(x)
-        xinp_h2, xgat_h2 = self.inp_to_h2.apply(x)
-        xinp_h3, xgat_h3 = self.inp_to_h3.apply(x)
         context_oh = one_hot(context, self.num_letters) * \
             tensor.shape_padright(context_mask)
 
-        initial_h1, initial_h2, initial_h3, initial_kappa, initial_w = \
+        initial_h1, initial_kappa, initial_w = \
             self.initial_states(batch_size)
 
         u = tensor.shape_padleft(
             tensor.arange(context.shape[1], dtype=floatX), 2)
 
-        def step(xinp_h1_t, xgat_h1_t, xinp_h2_t, xgat_h2_t, xinp_h3_t,
-                 xgat_h3_t, h1_tm1, h2_tm1, h3_tm1, k_tm1, w_tm1, ctx):
+        def step(xinp_h1_t, xgat_h1_t, h1_tm1, k_tm1, w_tm1, ctx):
 
             attinp_h1, attgat_h1 = self.att_to_h1.apply(w_tm1)
 
             h1_t = self.cell1.apply(
                 xinp_h1_t + attinp_h1,
                 xgat_h1_t + attgat_h1, h1_tm1, iterate=False)
-            h1inp_h2, h1gat_h2 = self.h1_to_h2.apply(h1_t)
-            h1inp_h3, h1gat_h3 = self.h1_to_h3.apply(h1_t)
 
             a_t, b_t, k_t = self.h1_to_att.apply(h1_t)
 
@@ -368,34 +313,16 @@ class Scribe(Initializable):
             # batch size X len context X num letters
             w_t = (tensor.shape_padright(phi_t) * ctx).sum(axis=1)
 
-            # batch size X num letters
-            attinp_h2, attgat_h2 = self.att_to_h2.apply(w_t)
-            attinp_h3, attgat_h3 = self.att_to_h3.apply(w_t)
+            return h1_t, k_t, w_t
 
-            h2_t = self.cell2.apply(
-                xinp_h2_t + h1inp_h2 + attinp_h2,
-                xgat_h2_t + h1gat_h2 + attgat_h2, h2_tm1,
-                iterate=False)
-
-            h2inp_h3, h2gat_h3 = self.h2_to_h3.apply(h2_t)
-
-            h3_t = self.cell3.apply(
-                xinp_h3_t + h1inp_h3 + h2inp_h3 + attinp_h3,
-                xgat_h3_t + h1gat_h3 + h2gat_h3 + attgat_h3, h3_tm1,
-                iterate=False)
-
-            return h1_t, h2_t, h3_t, k_t, w_t
-
-        (h1, h2, h3, kappa, w), scan_updates = theano.scan(
+        (h1, kappa, w), scan_updates = theano.scan(
             fn=step,
-            sequences=[xinp_h1, xgat_h1, xinp_h2, xgat_h2, xinp_h3, xgat_h3],
+            sequences=[xinp_h1, xgat_h1],
             non_sequences=[context_oh],
-            outputs_info=[initial_h1, initial_h2, initial_h3,
-                          initial_kappa, initial_w])
+            outputs_info=[initial_h1, initial_kappa, initial_w])
 
         readouts = self.h1_to_readout.apply(h1) + \
-            self.h2_to_readout.apply(h2) + \
-            self.h3_to_readout.apply(h3)
+            self.att_to_readout.apply(w)
 
         cost = self.emitter.cost(readouts, target)
         cost = (cost * mask).sum() / (mask.sum() + 1e-5) + 0. * start_flag
@@ -404,12 +331,6 @@ class Scribe(Initializable):
         updates.append((
             initial_h1,
             tensor.switch(start_flag, 0. * initial_h1, h1[-1])))
-        updates.append((
-            initial_h2,
-            tensor.switch(start_flag, 0. * initial_h2, h2[-1])))
-        updates.append((
-            initial_h3,
-            tensor.switch(start_flag, 0. * initial_h3, h3[-1])))
         updates.append((
             initial_kappa,
             tensor.switch(start_flag, 0. * initial_kappa, kappa[-1])))
@@ -422,7 +343,7 @@ class Scribe(Initializable):
     @application
     def sample_model(self, context, context_mask, n_steps, batch_size):
 
-        initial_h1, initial_h2, initial_h3, initial_kappa, initial_w = \
+        initial_h1, initial_kappa, initial_w = \
             self.initial_states(batch_size)
 
         initial_x = self.emitter.initial_outputs(batch_size)
@@ -433,18 +354,14 @@ class Scribe(Initializable):
         u = tensor.shape_padleft(
             tensor.arange(context.shape[1], dtype=floatX), 2)
 
-        def sample_step(x_tm1, h1_tm1, h2_tm1, h3_tm1, k_tm1, w_tm1, ctx):
+        def sample_step(x_tm1, h1_tm1, k_tm1, w_tm1, ctx):
             xinp_h1_t, xgat_h1_t = self.inp_to_h1.apply(x_tm1)
-            xinp_h2_t, xgat_h2_t = self.inp_to_h2.apply(x_tm1)
-            xinp_h3_t, xgat_h3_t = self.inp_to_h3.apply(x_tm1)
 
             attinp_h1, attgat_h1 = self.att_to_h1.apply(w_tm1)
 
             h1_t = self.cell1.apply(
                 xinp_h1_t + attinp_h1,
                 xgat_h1_t + attgat_h1, h1_tm1, iterate=False)
-            h1inp_h2, h1gat_h2 = self.h1_to_h2.apply(h1_t)
-            h1inp_h3, h1gat_h3 = self.h1_to_h3.apply(h1_t)
 
             a_t, b_t, k_t = self.h1_to_att.apply(h1_t)
 
@@ -462,34 +379,18 @@ class Scribe(Initializable):
             # batch size X len context X num letters
             w_t = (tensor.shape_padright(phi_t) * ctx).sum(axis=1)
 
-            # batch size X num letters
-            attinp_h2, attgat_h2 = self.att_to_h2.apply(w_t)
-            attinp_h3, attgat_h3 = self.att_to_h3.apply(w_t)
-
-            h2_t = self.cell2.apply(
-                xinp_h2_t + h1inp_h2 + attinp_h2,
-                xgat_h2_t + h1gat_h2 + attgat_h2, h2_tm1,
-                iterate=False)
-
-            h2inp_h3, h2gat_h3 = self.h2_to_h3.apply(h2_t)
-
-            h3_t = self.cell3.apply(
-                xinp_h3_t + h1inp_h3 + h2inp_h3 + attinp_h3,
-                xgat_h3_t + h1gat_h3 + h2gat_h3 + attgat_h3, h3_tm1,
-                iterate=False)
-
             readout_t = self.h1_to_readout.apply(h1_t) + \
-                self.h2_to_readout.apply(h2_t) + \
-                self.h3_to_readout.apply(h3_t)
+                self.att_to_readout.apply(w_t)
 
             x_t = self.emitter.emit(readout_t)
 
             mu_t, sigma_t, corr_t, pi_t, penup_t = \
                 self.emitter.components(readout_t)
 
-            return x_t, h1_t, h2_t, h3_t, k_t, w_t, pi_t, phi_t, a_t
+            return x_t, h1_t, k_t, w_t, pi_t, phi_t, a_t
 
-        (sample_x, h1, h2, h3, k, w, pi, phi, pi_att), updates = theano.scan(
+        (sample_x, h1, k, w, pi, phi, pi_att), updates = theano.scan(
+
             fn=sample_step,
             n_steps=n_steps,
             sequences=[],
@@ -497,8 +398,6 @@ class Scribe(Initializable):
             outputs_info=[
                 initial_x.eval(),
                 initial_h1,
-                initial_h2,
-                initial_h3,
                 initial_kappa,
                 initial_w,
                 None,

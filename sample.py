@@ -30,7 +30,7 @@ with open(os.path.join(
     parameters = load_parameters(src)
 
 # This line is unfortunately necessary until I change the saved model
-parameters = {"/scribe" + k: v for k, v in parameters.items()}
+# parameters = {"/scribe" + k: v for k, v in parameters.items()}
 
 scribe = Scribe(
     k=saved_args.num_mixture,
