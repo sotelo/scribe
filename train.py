@@ -12,7 +12,7 @@ from blocks.graph import ComputationGraph
 from blocks.main_loop import MainLoop
 from blocks.model import Model
 import cPickle
-from extensions import Plot, TimedFinish, Write
+from extensions import LearningRateSchedule, Plot, TimedFinish, Write
 from iam_on_line import stream_handwriting
 from model import Scribe
 from theano import function
@@ -62,12 +62,7 @@ cost, extra_updates = scribe.compute_cost(
     data, data_mask, context, context_mask, start_flag, args.batch_size)
 cost.name = 'nll'
 
-sample_x, sample_pi, sample_phi, sample_pi_att, updates_sample = \
-    scribe.sample_model(
-        context, context_mask, args.num_steps, args.num_samples)
-
-sampling_function = function(
-    [context, context_mask], sample_x, updates=updates_sample)
+valid_cost = cost
 
 cg = ComputationGraph(cost)
 model = Model(cost)
@@ -79,15 +74,18 @@ algorithm = GradientDescent(
     step_rule=CompositeRule([StepClipping(10.), Adam(args.learning_rate)]),
     on_unused_sources='warn')
 algorithm.add_updates(extra_updates)
+lr = algorithm.step_rule.components[1].learning_rate
+
+monitoring_vars = [cost, lr]
 
 train_monitor = TrainingDataMonitoring(
-    variables=[cost],
+    variables=monitoring_vars,
     every_n_batches=args.save_every,
     after_epoch=False,
     prefix="train")
 
 valid_monitor = DataStreamMonitoring(
-    [cost],
+    [valid_cost],
     valid_stream,
     every_n_batches=args.save_every,
     after_epoch=False,
@@ -133,11 +131,26 @@ if not worker or worker.is_main_worker:
             use_cpickle=True,
             save_main_loop=False)
         .add_condition(
-            ["after_batch"],
+            ["after_batch", "before_training"],
             predicate=OnLogRecord('valid_nll_best_so_far')),
+        LearningRateSchedule(
+            lr, 'valid_nll',
+            os.path.join(save_dir, "pkl", "best_" + exp_name + ".tar"),
+            patience=10,
+            num_cuts=5,
+            every_n_batches=args.save_every)]
+
+if args.plot_every:
+    sample_x, sample_pi, sample_phi, sample_pi_att, updates_sample = \
+        scribe.sample_model(
+            context, context_mask, args.num_steps, args.num_samples)
+    sampling_function = function(
+        [context, context_mask], sample_x, updates=updates_sample)
+
+    extensions += [
         Write(
             sampling_function,
-            every_n_batches=args.save_every,
+            every_n_batches=args.plot_every,
             n_samples=args.num_samples,
             save_name=os.path.join(save_dir, "samples", exp_name))]
 

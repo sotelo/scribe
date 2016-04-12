@@ -148,6 +148,9 @@ def train_parse():
     parser.add_argument('--load_experiment', type=str,
                         default=None,
                         help='name of the experiment that will be loaded')
+    parser.add_argument('--plot_every', type=int,
+                        default=None,
+                        help='how often do you want to plot')
     parser.add_argument('--platoon_port', type=int,
                         default=None,
                         help='port where platoon server is running')
