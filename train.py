@@ -1,4 +1,5 @@
 import os
+from algorithms import Adasecant
 from blocks import initialization
 from blocks.algorithms import (
     Adam, CompositeRule, GradientDescent, StepClipping)
@@ -20,6 +21,9 @@ from utils import train_parse
 
 parser = train_parse()
 args = parser.parse_args()
+
+if args.algorithm == "adasecant":
+    args.lr_schedule = False
 
 rec_h_dim = args.rnn_size
 att_size = args.size_attention
@@ -70,15 +74,23 @@ cg = ComputationGraph(cost)
 model = Model(cost)
 parameters = cg.parameters
 
+if args.algorithm == "adam":
+    step_rule = CompositeRule([StepClipping(10.), Adam(args.learning_rate)])
+elif args.algorithm == "adasecant":
+    step_rule = Adasecant()
+
 algorithm = GradientDescent(
     cost=cost,
     parameters=parameters,
-    step_rule=CompositeRule([StepClipping(10.), Adam(args.learning_rate)]),
+    step_rule=step_rule,
     on_unused_sources='warn')
 algorithm.add_updates(extra_updates)
-lr = algorithm.step_rule.components[1].learning_rate
 
-monitoring_vars = [cost, lr]
+monitoring_vars = [cost]
+
+if args.lr_schedule:
+    lr = algorithm.step_rule.components[1].learning_rate
+    monitoring_vars.append(lr)
 
 train_monitor = TrainingDataMonitoring(
     variables=monitoring_vars,
@@ -134,13 +146,16 @@ if not worker or worker.is_main_worker:
             save_main_loop=False)
         .add_condition(
             ["after_batch", "before_training"],
-            predicate=OnLogRecord('valid_nll_best_so_far')),
-        LearningRateSchedule(
-            lr, 'valid_nll',
-            os.path.join(save_dir, "pkl", "best_" + exp_name + ".tar"),
-            patience=10,
-            num_cuts=5,
-            every_n_batches=args.save_every)]
+            predicate=OnLogRecord('valid_nll_best_so_far'))]
+
+    if args.lr_schedule:
+        extensions += [
+            LearningRateSchedule(
+                lr, 'valid_nll',
+                os.path.join(save_dir, "pkl", "best_" + exp_name + ".tar"),
+                patience=10,
+                num_cuts=5,
+                every_n_batches=args.save_every)]
 
 if args.plot_every:
     sample_x, sample_pi, sample_phi, sample_pi_att, updates_sample = \

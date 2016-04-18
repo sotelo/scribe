@@ -161,6 +161,12 @@ def train_parse():
     parser.add_argument('--attention_alignment', type=float,
                         default=1.,
                         help='initial lengths of each attention step')
+    parser.add_argument('--algorithm', type=str,
+                        default='adam',
+                        help='adam or adasecant')
+    parser.add_argument('--lr_schedule', type=bool,
+                        default=True,
+                        help='whether to use the learning rate schedule')
     return parser
 
 
