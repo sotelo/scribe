@@ -155,6 +155,12 @@ def train_parse():
     parser.add_argument('--platoon_port', type=int,
                         default=None,
                         help='port where platoon server is running')
+    parser.add_argument('--attention_type', type=str,
+                        default='softmax',
+                        help='graves or softmax')
+    parser.add_argument('--attention_alignment', type=float,
+                        default=1.,
+                        help='initial lengths of each attention step')
     return parser
 
 

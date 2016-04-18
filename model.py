@@ -197,8 +197,14 @@ class Scribe(Initializable):
             att_size=10,
             num_letters=68,
             sampling_bias=0.,
+            attention_type="graves",
+            epsilon=1e-6,
+            attention_alignment=1.,
             **kwargs):
         super(Scribe, self).__init__(**kwargs)
+
+        # For now only softmax and graves are supported.
+        assert attention_type in ["graves", "softmax"]
 
         readouts_dim = 1 + 6 * k
 
@@ -207,6 +213,9 @@ class Scribe(Initializable):
         self.att_size = att_size
         self.num_letters = num_letters
         self.sampling_bias = sampling_bias
+        self.attention_type = attention_type
+        self.epsilon = epsilon
+        self.attention_alignment = attention_alignment
 
         self.cell1 = GatedRecurrent(dim=rec_h_dim, name='cell1')
 
@@ -299,16 +308,27 @@ class Scribe(Initializable):
 
             a_t, b_t, k_t = self.h1_to_att.apply(h1_t)
 
-            a_t = tensor.exp(a_t)
-            b_t = tensor.exp(b_t)
-            k_t = k_tm1 + tensor.exp(k_t)
+            if self.attention_type == "softmax":
+                a_t = tensor.nnet.softmax(a_t)
+            else:
+                a_t = tensor.exp(a_t)
+
+            b_t = tensor.exp(b_t) + self.epsilon
+            k_t = k_tm1 + self.attention_alignment * tensor.exp(k_t)
 
             a_t = tensor.shape_padright(a_t)
             b_t = tensor.shape_padright(b_t)
             k_t_ = tensor.shape_padright(k_t)
 
             # batch size X att size X len context
-            phi_t = tensor.sum(a_t * tensor.exp(-b_t * (k_t_ - u)**2), axis=1)
+            if self.attention_type == "softmax":
+                # numpy.sqrt(1/(2*numpy.pi)) is the weird number
+                phi_t = 0.3989422917366028 * tensor.sum(
+                    a_t * tensor.sqrt(b_t) *
+                    tensor.exp(-0.5 * b_t * (k_t_ - u)**2), axis=1)
+            else:
+                phi_t = tensor.sum(
+                    a_t * tensor.exp(-b_t * (k_t_ - u)**2), axis=1)
 
             # batch size X len context X num letters
             w_t = (tensor.shape_padright(phi_t) * ctx).sum(axis=1)
@@ -365,16 +385,27 @@ class Scribe(Initializable):
 
             a_t, b_t, k_t = self.h1_to_att.apply(h1_t)
 
-            a_t = tensor.exp(a_t)
-            b_t = tensor.exp(b_t)
-            k_t = k_tm1 + tensor.exp(k_t)
+            if self.attention_type == "softmax":
+                a_t = tensor.nnet.softmax(a_t)
+            else:
+                a_t = tensor.exp(a_t)
+
+            b_t = tensor.exp(b_t) + self.epsilon
+            k_t = k_tm1 + self.attention_alignment * tensor.exp(k_t)
 
             a_t = tensor.shape_padright(a_t)
             b_t = tensor.shape_padright(b_t)
             k_t_ = tensor.shape_padright(k_t)
 
             # batch size X att size X len context
-            phi_t = tensor.sum(a_t * tensor.exp(-b_t * (k_t_ - u)**2), axis=1)
+            if self.attention_type == "softmax":
+                # numpy.sqrt(1/(2*numpy.pi)) is the weird number
+                phi_t = 0.3989422917366028 * tensor.sum(
+                    a_t * tensor.sqrt(b_t) *
+                    tensor.exp(-0.5 * b_t * (k_t_ - u)**2), axis=1)
+            else:
+                phi_t = tensor.sum(
+                    a_t * tensor.exp(-b_t * (k_t_ - u)**2), axis=1)
 
             # batch size X len context X num letters
             w_t = (tensor.shape_padright(phi_t) * ctx).sum(axis=1)
