@@ -19,7 +19,8 @@ data_std = std_values['data_std']
 all_chars = ([chr(ord('a') + i) for i in range(26)] +
              [chr(ord('A') + i) for i in range(26)] +
              [chr(ord('0') + i) for i in range(10)] +
-             [',', '.', ' ', '"', '<UNK>', "'"])
+             [' ', '!', '"', '#', '&', "'", '(', ')', '*', '+',
+              ',', '-', '.', '/', ':', ';', '?', '[', ']', '<UNK>'])
 
 code2char = dict(enumerate(all_chars))
 char2code = {v: k for k, v in code2char.items()}
@@ -30,8 +31,8 @@ def plot_tight(data, save_name=None):
     # Plot a single example.
     f, ax = pyplot.subplots()
 
-    # std_x = data_std * data + data_mean
-    std_x = data
+    std_x = data_std * data + data_mean
+    # std_x = data
 
     x = numpy.cumsum(std_x[:, 1])
     y = numpy.cumsum(std_x[:, 2])
@@ -70,8 +71,8 @@ def full_plot(data, pi, phi, pi_at, save_name=None):
     # Plot a single example.
     f, (ax1, ax2, ax3, ax4) = pyplot.subplots(4, 1)
 
-    # std_x = data_std * data + data_mean
-    std_x = data
+    std_x = data_std * data + data_mean
+    # std_x = data
 
     x = numpy.cumsum(std_x[:, 1])
     y = numpy.cumsum(std_x[:, 2])
@@ -137,7 +138,7 @@ def train_parse():
                         help='save dir directory')
     parser.add_argument('--size_attention', type=int, default=10,
                         help='number of normal components for attention')
-    parser.add_argument('--num_letters', type=int, default=68,
+    parser.add_argument('--num_letters', type=int, default=len(all_chars),
                         help='size of dictionary')
     parser.add_argument('--num_samples', type=int, default=10,
                         help='number of samples')

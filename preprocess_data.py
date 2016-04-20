@@ -59,24 +59,6 @@ strokes = [numpy.vstack([[0, 0, 0], x]) for x in strokes]
 for i, stroke in enumerate(strokes):
     strokes[i][:, 0] = strokes_bp[i][:, 0]
 
-# Computing mean and variance seems to not be necessary.
-# Training is going slower than just scaling.
-
-# Remove outliers
-# strokes2 = [stroke_ for stroke_ in strokes
-#     if stroke_.min() >= -50 and stroke_.max() <= 100]
-# all_strokes = numpy.vstack(strokes2)
-
-# all_strokes[all_strokes > 100] = 100 # Close to percentile 98
-# all_strokes[all_strokes < -50] = -50 # Close to percentile 1
-# data_mean = all_strokes.mean(axis=0)
-# data_std = all_strokes.std(axis=0)
-
-data_mean = numpy.array([0., 0., 0.])
-data_std = numpy.array([1., 20., 20.])
-
-strokes = [(x - data_mean) / data_std for x in strokes]
-
 transcript_files = [x.split("/")[-1] for x in transcript_files]
 transcript_files = [re.sub('-[0-9][0-9].xml', '.txt', x)
                     for x in transcript_files]
@@ -139,10 +121,26 @@ all_transcripts.append('Hallo Well')
 # Remove outliers and big / small sequences
 # Makes a BIG difference.
 filter_ = [len(x) <= 1200 and len(x) >= 301 and
-           x.max() <= 100 and x.min() >= -50 for x in strokes]
+           x.max() <= 2000 and x.min() >= -1000 for x in strokes]
 
 strokes = [x for x, cond in zip(strokes, filter_) if cond]
 all_transcripts = [x for x, cond in zip(all_transcripts, filter_) if cond]
+
+
+# Computing mean and variance seems to not be necessary.
+# Training is going slower than just scaling.
+
+# Remove outliers
+
+all_strokes = numpy.vstack(strokes)
+
+data_mean = all_strokes.mean(axis=0)
+data_std = all_strokes.std(axis=0)
+
+data_mean[0] = 0.
+data_std[0] = 1.
+
+strokes = [(x - data_mean) / data_std for x in strokes]
 
 num_examples = len(strokes)
 
@@ -200,5 +198,5 @@ h5file.attrs['split'] = H5PYDataset.create_split_array(split_dict)
 h5file.flush()
 h5file.close()
 numpy.savez(
-    os.path.join(data_path, 'handwriting.npz'),
+    os.path.join(data_path, 'handwriting_std.npz'),
     data_mean=data_mean, data_std=data_std)
