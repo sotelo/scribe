@@ -40,10 +40,18 @@ w_init = initialization.IsotropicGaussian(0.01)
 b_init = initialization.Constant(0.)
 
 train_stream = stream_handwriting(
-    ('train',), args.batch_size, args.train_seq_length, args.num_letters)
+    which_sets=('train',),
+    batch_size=args.batch_size,
+    seq_size=args.train_seq_length,
+    num_letters=args.num_letters,
+    sorting_mult=args.sort_mult)
 
 valid_stream = stream_handwriting(
-    ('valid',), args.batch_size, args.valid_seq_length, args.num_letters, 5)
+    which_sets=('valid',),
+    batch_size=args.batch_size,
+    seq_size=args.valid_seq_length,
+    num_letters=args.num_letters,
+    sorting_mult=5)
 
 x_tr, x_mask_tr, context_tr, context_mask_tr, flag_tr = \
     next(train_stream.get_epoch_iterator())
@@ -75,9 +83,10 @@ model = Model(cost)
 parameters = cg.parameters
 
 if args.algorithm == "adam":
-    step_rule = CompositeRule([StepClipping(10.), Adam(args.learning_rate)])
+    step_rule = CompositeRule(
+        [StepClipping(10. * args.grad_clip), Adam(args.learning_rate)])
 elif args.algorithm == "adasecant":
-    step_rule = Adasecant()
+    step_rule = Adasecant(grad_clip=args.grad_clip)
 
 algorithm = GradientDescent(
     cost=cost,
@@ -146,7 +155,14 @@ if not worker or worker.is_main_worker:
             save_main_loop=False)
         .add_condition(
             ["after_batch", "before_training"],
-            predicate=OnLogRecord('valid_nll_best_so_far'))]
+            predicate=OnLogRecord('valid_nll_best_so_far')),
+        Checkpoint(
+            os.path.join(save_dir, "pkl", "last_" + exp_name + ".tar"),
+            after_training=True,
+            save_separately=['log'],
+            use_cpickle=True,
+            every_n_batches=args.save_every,
+            save_main_loop=False)]
 
     if args.lr_schedule:
         extensions += [

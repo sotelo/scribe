@@ -173,6 +173,8 @@ def stream_handwriting(
         num_letters,
         sorting_mult=20):
 
+    assert sorting_mult > 0
+
     dataset = Handwriting(which_sets)
     sorting_size = batch_size * sorting_mult
     num_examples = sorting_size * (dataset.num_examples / sorting_size)

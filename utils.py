@@ -9,6 +9,7 @@ if 'handwriting' not in save_dir:
 import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 data_path = os.environ['FUEL_DATA_PATH']
 data_path = os.path.join(data_path, 'handwriting/')
@@ -93,9 +94,15 @@ def full_plot(data, pi, phi, pi_at, save_name=None):
     ax1.axes.get_xaxis().set_visible(False)
     ax1.axes.get_yaxis().set_visible(False)
 
-    ax2.imshow(phi.T, aspect='auto', origin='lower', interpolation='nearest')
-    ax3.imshow(pi_at.T, aspect='auto', origin='lower', interpolation='nearest')
-    ax4.imshow(pi.T, aspect='auto', origin='lower', interpolation='nearest')
+    def plot_matrix(data, ax):
+        im = ax.imshow(
+            data.T, aspect='auto', origin='lower', interpolation='nearest')
+        cax = make_axes_locatable(ax).append_axes("right", size="1%", pad=0.05)
+        pyplot.colorbar(im, cax=cax)
+
+    plot_matrix(phi, ax2)
+    plot_matrix(pi_at, ax3)
+    plot_matrix(pi, ax4)
 
     if save_name is None:
         pyplot.show()
@@ -121,15 +128,15 @@ def train_parse():
                         help='name of the experiment.')
     parser.add_argument('--rnn_size', type=int, default=400,
                         help='size of RNN hidden state')
-    parser.add_argument('--batch_size', type=int, default=64,
+    parser.add_argument('--batch_size', type=int, default=32,
                         help='minibatch size')
-    parser.add_argument('--train_seq_length', type=int, default=300,
+    parser.add_argument('--train_seq_length', type=int, default=1200,
                         help='RNN sequence length')
     parser.add_argument('--valid_seq_length', type=int, default=1200,
                         help='RNN sequence length')
-    parser.add_argument('--save_every', type=int, default=500,
+    parser.add_argument('--save_every', type=int, default=1000,
                         help='save frequency')
-    parser.add_argument('--learning_rate', type=float, default=1e-4,
+    parser.add_argument('--learning_rate', type=float, default=3e-4,
                         help='learning rate')
     parser.add_argument('--num_mixture', type=int, default=20,
                         help='number of gaussian mixtures')
@@ -159,14 +166,20 @@ def train_parse():
                         default='softmax',
                         help='graves or softmax')
     parser.add_argument('--attention_alignment', type=float,
-                        default=1.,
+                        default=0.05,
                         help='initial lengths of each attention step')
     parser.add_argument('--algorithm', type=str,
                         default='adam',
                         help='adam or adasecant')
+    parser.add_argument('--grad_clip', type=float,
+                        default=0.9,
+                        help='how much to clip the gradients. for adam is 10x')
     parser.add_argument('--lr_schedule', type=bool,
                         default=True,
                         help='whether to use the learning rate schedule')
+    parser.add_argument('--sort_mult', type=int,
+                        default=20,
+                        help='number of minibatches to sort')
     return parser
 
 
