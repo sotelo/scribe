@@ -3,12 +3,13 @@ from blocks.bricks.base import application
 from blocks.bricks.parallel import Fork
 from blocks.bricks.recurrent import GatedRecurrent
 from blocks.bricks.sequence_generators import AbstractEmitter
+from blocks.roles import add_role, INITIAL_STATE
 from blocks.utils import shared_floatx_zeros
 
 import numpy
 
 import theano
-from theano import tensor
+from theano import tensor, shared
 
 floatX = theano.config.floatX
 
@@ -260,6 +261,12 @@ class Scribe(Initializable):
             self.att_to_readout,
             self.emitter]
 
+    def _allocate(self):
+        self.initial_w = shared_floatx_zeros(
+            (self.num_letters,), name="initial_w")
+
+        add_role(self.initial_w, INITIAL_STATE)
+
     def symbolic_input_variables(self):
         data = tensor.tensor3('features')
         data_mask = tensor.matrix('features_mask')
@@ -270,11 +277,15 @@ class Scribe(Initializable):
         return data, data_mask, context, context_mask, start_flag
 
     def initial_states(self, batch_size):
-        initial_h1 = shared_floatx_zeros((batch_size, self.rec_h_dim))
+        initial_h1 = self.cell1.initial_states(batch_size)
         initial_kappa = shared_floatx_zeros((batch_size, self.att_size))
-        initial_w = shared_floatx_zeros((batch_size, self.num_letters))
+        initial_w = tensor.repeat(self.initial_w[None, :], batch_size, 0)
+        last_h1 = shared_floatx_zeros((batch_size, self.rec_h_dim))
+        last_w = shared_floatx_zeros((batch_size, self.num_letters))
+        use_last_states = shared(numpy.asarray(0., dtype=floatX))
 
-        return initial_h1, initial_kappa, initial_w
+        return initial_h1, initial_kappa, initial_w, \
+            last_h1, last_w, use_last_states
 
     @application
     def compute_cost(
@@ -292,8 +303,14 @@ class Scribe(Initializable):
         context_oh = one_hot(context, self.num_letters) * \
             tensor.shape_padright(context_mask)
 
-        initial_h1, initial_kappa, initial_w = \
+        initial_h1, initial_kappa, initial_w, \
+            last_h1, last_w, use_last_states = \
             self.initial_states(batch_size)
+
+        input_h1 = tensor.switch(
+            use_last_states, last_h1, initial_h1)
+        input_w = tensor.switch(
+            use_last_states, last_w, initial_w)
 
         u = tensor.shape_padleft(
             tensor.arange(context.shape[1], dtype=floatX), 2)
@@ -339,7 +356,7 @@ class Scribe(Initializable):
             fn=step,
             sequences=[xinp_h1, xgat_h1],
             non_sequences=[context_oh],
-            outputs_info=[initial_h1, initial_kappa, initial_w])
+            outputs_info=[input_h1, initial_kappa, input_w])
 
         readouts = self.h1_to_readout.apply(h1) + \
             self.att_to_readout.apply(w)
@@ -348,22 +365,20 @@ class Scribe(Initializable):
         cost = (cost * mask).sum() / (mask.sum() + 1e-5) + 0. * start_flag
 
         updates = []
-        updates.append((
-            initial_h1,
-            tensor.switch(start_flag, 0. * initial_h1, h1[-1])))
+        updates.append((last_h1, h1[-1]))
         updates.append((
             initial_kappa,
             tensor.switch(start_flag, 0. * initial_kappa, kappa[-1])))
-        updates.append((
-            initial_w,
-            tensor.switch(start_flag, 0. * initial_w, w[-1])))
+        updates.append((last_w, w[-1]))
+        updates.append((use_last_states, 1. - start_flag))
 
         return cost, scan_updates + updates
 
     @application
     def sample_model(self, context, context_mask, n_steps, batch_size):
 
-        initial_h1, initial_kappa, initial_w = \
+        initial_h1, initial_kappa, initial_w, \
+            last_h1, last_w, use_last_states = \
             self.initial_states(batch_size)
 
         initial_x = self.emitter.initial_outputs(batch_size)

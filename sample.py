@@ -29,9 +29,6 @@ with open(os.path.join(
         "best_" + args.experiment_name + ".tar"), 'rb') as src:
     parameters = load_parameters(src)
 
-# This line is unfortunately necessary until I change the saved model
-# parameters = {"/scribe" + k: v for k, v in parameters.items()}
-
 scribe = Scribe(
     k=saved_args.num_mixture,
     rec_h_dim=saved_args.rnn_size,
