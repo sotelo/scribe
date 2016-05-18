@@ -86,7 +86,12 @@ if args.algorithm == "adam":
     step_rule = CompositeRule(
         [StepClipping(10. * args.grad_clip), Adam(args.learning_rate)])
 elif args.algorithm == "adasecant":
-    step_rule = Adasecant(grad_clip=args.grad_clip)
+    step_rule = Adasecant(
+        grad_clip=args.grad_clip,
+        use_adagrad=not args.disable_adagrad,
+        use_corrected_grad=not args.disable_variance_reduction,
+        use_block_normalization=not args.disable_normalization,
+        use_outlier_detection=not args.disable_outlier_detection)
 
 algorithm = GradientDescent(
     cost=cost,

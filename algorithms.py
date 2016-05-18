@@ -157,6 +157,10 @@ class Adasecant(StepRule):
     use_corrected_grad: bool, optional
         Either to use correction for gradients (referred as variance
         reduction in the workshop paper).
+    use_block_normalization: bool, optional
+        Use block-wise normalization in the parameters
+    use_outlier_detection: bool, optional
+        Either to use the outlier detection
     """
     def __init__(self, decay=0.95,
                  gamma_clip=0.0,
@@ -168,7 +172,9 @@ class Adasecant(StepRule):
                  use_adagrad=True,
                  perform_update=True,
                  skip_nan_inf=False,
-                 use_corrected_grad=True):
+                 use_corrected_grad=True,
+                 use_block_normalization=True,
+                 use_outlier_detection=True):
 
         assert decay >= 0.
         assert decay < 1.
@@ -184,6 +190,8 @@ class Adasecant(StepRule):
         self.gamma_reg = gamma_reg
         self.damping = 1e-7
         self.perform_update = perform_update
+        self.use_block_normalization = use_block_normalization
+        self.use_outlier_detection = use_outlier_detection
 
         # We have to bound the tau to prevent it to
         # grow to an arbitrarily large number, oftenwise
@@ -285,8 +293,9 @@ class Adasecant(StepRule):
 
             # mean_square_dx := E[(\Delta x)^2]_{t-1}
             mean_square_dx = shared_floatx(param.get_value() * 0., name="msd_" + param.name)
-
-            if self.use_corrected_grad:
+            
+            # This conditional is breaking things.
+            if self.use_corrected_grad or True:
                 old_grad = shared_floatx(param.get_value() * 0. + eps)
 
             #The uncorrected gradient of previous of the previous update:
@@ -307,7 +316,9 @@ class Adasecant(StepRule):
             gnorm_sqr_o = cond * gnorm + (1 - cond) * gnorm_sqr
             gnorm_sqr_b = gnorm_sqr_o / (1 - fix_decay)
 
-            norm_grad = norm_grad / (tensor.sqrt(gnorm_sqr_b) + eps)
+            if self.use_block_normalization:
+                norm_grad = norm_grad / (tensor.sqrt(gnorm_sqr_b) + eps)
+
             msdx = cond * norm_grad**2 + (1 - cond) * mean_square_dx
             mdx = cond * norm_grad + (1 - cond) * mean_dx
 
@@ -320,7 +331,7 @@ class Adasecant(StepRule):
             """
             # E[g_i^2]_t
             new_mean_squared_grad = (
-                mean_square_grad * (1 - 1 / taus_x_t)  +
+                mean_square_grad * (1 - 1 / taus_x_t) +
                 tensor.sqr(norm_grad) / (taus_x_t)
             )
             new_mean_squared_grad.name = "msg_" + param.name
@@ -449,9 +460,11 @@ class Adasecant(StepRule):
 
             #Perform the outlier detection:
             #This outlier detection is slightly different:
-            new_taus_t = tensor.switch(tensor.or_(abs(norm_grad - mg) > (2 * tensor.sqrt(mgsq  - mg**2)),
-                                        abs(cur_curvature - nc_ave) > (2 * tensor.sqrt(nc_sq_ave - nc_ave**2))),
-                                  tensor.switch(new_taus_t > 2.5, shared_floatx(2.5), new_taus_t + shared_floatx(1.0) + eps), new_taus_t)
+
+            if self.use_outlier_detection:
+                new_taus_t = tensor.switch(tensor.or_(abs(norm_grad - mg) > (2 * tensor.sqrt(mgsq  - mg**2)),
+                                            abs(cur_curvature - nc_ave) > (2 * tensor.sqrt(nc_sq_ave - nc_ave**2))),
+                                      tensor.switch(new_taus_t > 2.5, shared_floatx(2.5), new_taus_t + shared_floatx(1.0) + eps), new_taus_t)
 
             #Apply the bound constraints on tau:
             new_taus_t = tensor.maximum(self.lower_bound_tau, new_taus_t)

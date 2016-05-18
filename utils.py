@@ -180,6 +180,10 @@ def train_parse():
     parser.add_argument('--sort_mult', type=int,
                         default=20,
                         help='number of minibatches to sort')
+    parser.add_argument('--disable_variance_reduction', type=bool, default=False)
+    parser.add_argument('--disable_adagrad', type=bool, default=False)
+    parser.add_argument('--disable_normalization', type=bool, default=False)
+    parser.add_argument('--disable_outlier_detection', type=bool, default=False)
     return parser
 
 
