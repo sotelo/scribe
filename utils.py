@@ -175,7 +175,7 @@ def train_parse():
                         default=0.9,
                         help='how much to clip the gradients. for adam is 10x')
     parser.add_argument('--lr_schedule', type=bool,
-                        default=True,
+                        default=False,
                         help='whether to use the learning rate schedule')
     parser.add_argument('--sort_mult', type=int,
                         default=20,

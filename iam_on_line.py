@@ -8,7 +8,8 @@ import os
 
 from fuel import config
 from fuel.datasets import H5PYDataset
-from fuel.schemes import ConstantScheme, ShuffledExampleScheme
+from fuel.schemes import (
+    ConstantScheme, SequentialExampleScheme, ShuffledExampleScheme)
 from fuel.streams import DataStream
 from fuel.transformers import (
     AgnosticSourcewiseTransformer, Batch, Mapping, Padding, SortMapping,
@@ -179,17 +180,22 @@ def stream_handwriting(
     sorting_size = batch_size * sorting_mult
     num_examples = sorting_size * (dataset.num_examples / sorting_size)
 
-    data_stream = DataStream.default_stream(
-        dataset,
-        iteration_scheme=ShuffledExampleScheme(num_examples))
+    if which_sets == ('train',):
+        print "Random order."
+        scheme = ShuffledExampleScheme(num_examples)
+    else:
+        print "Sequential order."
+        scheme = SequentialExampleScheme(num_examples)
+
+    data_stream = DataStream.default_stream(dataset, iteration_scheme=scheme)
 
     # Sort by length of the data sequence.
-    data_stream = Batch(data_stream,
-                        iteration_scheme=ConstantScheme(sorting_size))
+    data_stream = Batch(
+        data_stream, iteration_scheme=ConstantScheme(sorting_size))
     data_stream = Mapping(data_stream, SortMapping(_length))
     data_stream = Unpack(data_stream)
-    data_stream = Batch(data_stream,
-                        iteration_scheme=ConstantScheme(batch_size))
+    data_stream = Batch(
+        data_stream, iteration_scheme=ConstantScheme(batch_size))
 
     data_stream = Padding(data_stream)
     data_stream = SourceMapping(
@@ -204,5 +210,5 @@ def stream_handwriting(
     return data_stream
 
 if __name__ == "__main__":
-    data_stream = stream_handwriting(('train',), 64, 100, 69)
-    x_tr = next(data_stream.get_epoch_iterator())
+    data_stream = stream_handwriting(('valid',), 64, 100, 69, 1)
+    print next(data_stream.get_epoch_iterator())[0]
