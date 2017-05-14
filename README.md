@@ -1,4 +1,20 @@
-# Your own personal scribe.
+# Online handwriting using recurrent neural networks.
+
+
+This repo contains the code for our paper:
+**A Robust Adaptive Stochastic Gradient Method for Deep Learning**. You can find the paper [here](https://arxiv.org/pdf/1703.00788.pdf). If you use the code in this repo, please cite:
+
+```
+@inproceedings{adasecant,
+  author    = {Caglar Guhlcere and Jose Sotelo and Marcin Moczulski and Yoshua Bengio},
+  title     = {A Robust Adaptive Stochastic Gradient Method for Deep Learning},
+  booktitle = {2017 International Joint Conference on Neural Networks, {IJCNN} 2017,
+               Anchorage, Alaska,
+  year      = {2017}
+}
+```
+
+## Your own personal scribe.
 
 This repo has an implementation of handwriting synthesis using recurrent neural networks. The details of the algorithm are described in this [paper](http://arxiv.org/abs/1308.0850) by Alex Graves.
 
